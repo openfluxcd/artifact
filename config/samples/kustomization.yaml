@@ -1,0 +1,4 @@
+## Append samples of your project ##
+resources:
+- openfluxcd_v1alpha1_artifact.yaml
+# +kubebuilder:scaffold:manifestskustomizesamples

@@ -1,0 +1,22 @@
+apiVersion: openfluxcd.mandelsoft.org/v1alpha1
+kind: Artifact
+metadata:
+  labels:
+    app.kubernetes.io/name: artifact
+    app.kubernetes.io/managed-by: kustomize
+  name: artifact-sample
+  ownerReferences:
+    - apiVersion: v1
+      kind: ConfigMap
+      name: openfluxcd-config
+      uid: 50b1617a-4800-449f-8061-c784097c942a
+spec:
+  digest: sha256:ebe8bb8289a194858affe1753de980f9607ef9977e427bbd2518b67f9f44edec
+  lastUpdateTime: "2024-07-12T11:59:42Z"
+  path: xz/z
+  revision: master@sha1:08238eada746de8114efa36d36e2aa93bd76cfab
+  size: 1234
+  url: file:///Users/I544542/Projects/openfluxcd/test.tar.gz
+
+
+
