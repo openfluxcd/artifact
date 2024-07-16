@@ -1,6 +1,7 @@
 package commonv1
 
 import (
+	"fmt"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	"github.com/openfluxcd/artifact/utils"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -55,4 +56,11 @@ func (s *SourceRef) GetName() string {
 
 func (s *SourceRef) GetNamespace() string {
 	return s.Namespace
+}
+
+func (s *SourceRef) String() string {
+	if s.GetNamespace() != "" {
+		return fmt.Sprintf("%s/%s/%s/%s", s.GetGroupKind().Group, s.GetGroupKind().Kind, s.GetNamespace(), s.GetName())
+	}
+	return fmt.Sprintf("%s/%s/%s", s.GetGroupKind().Group, s.GetGroupKind().Kind, s.GetName())
 }

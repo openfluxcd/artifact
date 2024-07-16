@@ -14,6 +14,7 @@ type SourceRefProvider interface {
 	GetGroupKind() schema.GroupKind
 	GetName() string
 	GetNamespace() string
+	String() string
 }
 
 func NewSourceRef(g, k, ns, name string) SourceRefProvider {
@@ -48,6 +49,13 @@ func (d *DefaultSourceRef) GetName() string {
 
 func (d *DefaultSourceRef) GetNamespace() string {
 	return d.Namespace
+}
+
+func (d *DefaultSourceRef) String() string {
+	if d.GetNamespace() != "" {
+		return fmt.Sprintf("%s/%s/%s/%s", d.GetGroupKind().Group, d.GetGroupKind().Kind, d.GetNamespace(), d.GetName())
+	}
+	return fmt.Sprintf("%s/%s/%s", d.GetGroupKind().Group, d.GetGroupKind().Kind, d.GetName())
 }
 
 func NormalizedSourceRef(ref SourceRefProvider, defns string) SourceRefProvider {

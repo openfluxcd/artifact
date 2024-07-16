@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"k8s.io/apimachinery/pkg/api/meta"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -42,72 +41,56 @@ type ActionResource interface {
 
 var _ ArtifactSource = sourcev1.Source(nil)
 
-func indirectRequestsForRevisionChangeOf[T any, P ActionResourcePointerType[T]](client ctrlclient.Client, scheme *runtime.Scheme, mapper RequestMapper) handler.MapFunc {
+func requestsForRevisionChangeOf[T any, P ActionResourcePointerType[T]](client ctrlclient.Client, scheme *runtime.Scheme, opts *Options) handler.MapFunc {
 	// Queues requests for all kustomization resources that either reference the artifact resource directly in their
 	// source ref or that reference another resource that is referenced by the owner reference of the artifact in their
 	// source ref.
 	return func(ctx context.Context, obj ctrlclient.Object) []reconcile.Request {
 		log := ctrl.LoggerFrom(ctx)
-		art, ok := obj.(*artifactv1.Artifact)
+		src, ok := obj.(ArtifactSource)
 		if !ok {
 			log.Error(fmt.Errorf("expected an object conformed with GetArtifact() method, but got a %T", obj),
 				"failed to get reconcile requests for revision change")
 			return nil
 		}
 		// If we do not have an artifact, we have no requests to make
-		if art.GetArtifact() == nil {
+		if src.GetArtifact() == nil {
 			return nil
 		}
 
-		list := utils.CreateListForType[T, P](scheme)
-		gk := utils.GetGroupKindForObject(scheme, obj)
-		if err := client.List(ctx, list, ctrlclient.MatchingFields{
-			sourceRefIndexKey: fmt.Sprintf("%s/%s/%s/%s", gk.Group, gk.Kind, obj.GetNamespace(), obj.GetName()),
-		}); err != nil {
-			log.Error(err, "failed to list objects for revision change")
-			return nil
+		actions := lookupBySourceObj[T, P](ctx, client, scheme, obj, src.GetArtifact())
+
+		if art, ok := src.(*artifactv1.Artifact); ok {
+			list := utils.CreateListForType[T, P](scheme)
+			gk := utils.GetGroupKindForObject(scheme, obj)
+			if err := client.List(ctx, list, ctrlclient.MatchingFields{
+				sourceRefIndexKey: fmt.Sprintf("%s/%s/%s/%s", gk.Group, gk.Kind, obj.GetNamespace(), obj.GetName()),
+			}); err != nil {
+				log.Error(err, "failed to list objects for revision change")
+				return nil
+			}
+
+			for _, ref := range art.OwnerReferences {
+				actions = append(actions, lookupByCoordinates[T, P](ctx, client, scheme, utils.ExtractGroupName(ref.APIVersion), ref.Kind, art.Namespace, ref.Name, art.GetArtifact())...)
+			}
+		}
+		for i := 0; i < len(actions); i++ {
+			if !opts.TriggerPredicate(actions[i].(ActionResource), src.GetArtifact()) {
+				actions = append(actions[:i], actions[i+1:]...)
+				i--
+			}
 		}
 
-		objs := lookup[T, P](ctx, client, scheme, obj, art.GetArtifact())
-
-		for _, ref := range art.OwnerReferences {
-			objs = append(objs, lookupRaw[T, P](ctx, client, scheme, utils.ExtractGroupName(ref.APIVersion), ref.Kind, art.Namespace, ref.Name, art.GetArtifact())...)
-		}
-		if mapper == nil {
-			mapper = DefaultRequestMapper
-		}
-		return mapper(objs)
+		return opts.RequestMapper(actions)
 	}
 }
 
-func requestsForRevisionChangeOf[T any, P ActionResourcePointerType[T]](client ctrlclient.Client, scheme *runtime.Scheme, mapper RequestMapper) handler.MapFunc {
-	return func(ctx context.Context, obj ctrlclient.Object) []reconcile.Request {
-		log := ctrl.LoggerFrom(ctx)
-		art, ok := obj.(ArtifactSource)
-		if !ok {
-			log.Error(fmt.Errorf("expected an object conformed with GetArtifact() method, but got a %T", obj),
-				"failed to get reconcile requests for revision change")
-			return nil
-		}
-		// If we do not have an artifact, we have no requests to make
-		if art.GetArtifact() == nil {
-			return nil
-		}
-
-		objs := lookup[T, P](ctx, client, scheme, obj, art.GetArtifact())
-		if mapper == nil {
-			mapper = DefaultRequestMapper
-		}
-		return mapper(objs)
-	}
-}
-
-func lookup[T any, P ActionResourcePointerType[T]](ctx context.Context, client ctrlclient.Client, scheme *runtime.Scheme, srcobj ctrlclient.Object, art *sourcev1.Artifact) []runtime.Object {
+func lookupBySourceObj[T any, P ActionResourcePointerType[T]](ctx context.Context, client ctrlclient.Client, scheme *runtime.Scheme, srcobj ctrlclient.Object, art *sourcev1.Artifact) []runtime.Object {
 	gk := utils.GetGroupKindForObject(scheme, srcobj)
-	return lookupRaw[T, P](ctx, client, scheme, gk.Group, gk.Kind, srcobj.GetNamespace(), srcobj.GetName(), art)
+	return lookupByCoordinates[T, P](ctx, client, scheme, gk.Group, gk.Kind, srcobj.GetNamespace(), srcobj.GetName(), art)
 }
 
-func lookupRaw[T any, P ActionResourcePointerType[T]](ctx context.Context, client ctrlclient.Client, scheme *runtime.Scheme, group, kind, ns, name string, art *sourcev1.Artifact) []runtime.Object {
+func lookupByCoordinates[T any, P ActionResourcePointerType[T]](ctx context.Context, client ctrlclient.Client, scheme *runtime.Scheme, group, kind, ns, name string, art *sourcev1.Artifact) []runtime.Object {
 	log := ctrl.LoggerFrom(ctx)
 	list := utils.CreateListForType[T, P](scheme)
 	if err := client.List(ctx, list, ctrlclient.MatchingFields{
@@ -117,15 +100,15 @@ func lookupRaw[T any, P ActionResourcePointerType[T]](ctx context.Context, clien
 		return nil
 	}
 
-	objs, _ := meta.ExtractList(list)
+	actions, _ := meta.ExtractList(list)
 	// filter action by comparing status and art revision
 
-	return objs
+	return actions
 }
 
 func Setup[T any, P ActionResourcePointerType[T]](ctx context.Context, mgr ctrl.Manager, client ctrlclient.Client, options ...Option) (*builder.Builder, error) {
-	var _nil T
-	obj := P(&_nil)
+	var _obj T
+	obj := P(&_obj)
 
 	if err := mgr.GetCache().IndexField(ctx, obj, sourceRefIndexKey,
 		SourceReferenceIndex[P]()); err != nil {
@@ -137,28 +120,17 @@ func Setup[T any, P ActionResourcePointerType[T]](ctx context.Context, mgr ctrl.
 		return nil, fmt.Errorf("failed setting index fields: %w", err)
 	}
 
-	artgk := schema.GroupKind{
-		Group: artifactv1.GroupVersion.Group,
-		Kind:  artifactv1.ArtifactKind,
-	}
-
 	opts := EvalOptions(options...)
 	bldr := ctrl.NewControllerManagedBy(mgr)
+
+	bldr.For(obj, opts.ForOptions...)
 	for gk, o := range matchers.BuiltinFluxSourceKinds {
 		if opts.AllowedSourceKinds == nil || opts.AllowedSourceKinds.Match(gk) {
-			if gk != artgk {
-				bldr = bldr.Watches(
-					o.DeepCopyObject().(ctrlclient.Object),
-					handler.EnqueueRequestsFromMapFunc(requestsForRevisionChangeOf[T, P](client, mgr.GetScheme(), opts.RequestMapper)),
-					builder.WithPredicates(SourceRevisionChangePredicate{}),
-				)
-			} else {
-				bldr = bldr.Watches(
-					&artifactv1.Artifact{},
-					handler.EnqueueRequestsFromMapFunc(indirectRequestsForRevisionChangeOf[T, P](client, mgr.GetScheme(), opts.RequestMapper)),
-					builder.WithPredicates(SourceRevisionChangePredicate{}),
-				)
-			}
+			bldr = bldr.Watches(
+				o.DeepCopyObject().(ctrlclient.Object),
+				handler.EnqueueRequestsFromMapFunc(requestsForRevisionChangeOf[T, P](client, mgr.GetScheme(), opts)),
+				builder.WithPredicates(SourceRevisionChangePredicate{}),
+			)
 		}
 	}
 	return bldr, nil
@@ -181,16 +153,14 @@ func SourceReferenceIndex[T ActionResource]() func(o ctrlclient.Object) []string
 	}
 }
 
-func GetSource(ctx context.Context, client ctrlclient.Client,
-	scheme runtime.Scheme, obj ActionResource, options ...Option) (ArtifactSource, error) {
-
-	ref := utils.NormalizedSourceRef(obj.GetSourceRef(), obj.GetNamespace())
+func GetSource(ctx context.Context, client ctrlclient.Client, action ActionResource, options ...Option) (ArtifactSource, error) {
+	ref := utils.NormalizedSourceRef(action.GetSourceRef(), action.GetNamespace())
 
 	opts := EvalOptions(options...)
-	if opts.CrossNamespaceRefsForbidden() && ref.GetNamespace() != obj.GetNamespace() {
+	if opts.CrossNamespaceRefsForbidden() && ref.GetNamespace() != action.GetNamespace() {
 		return nil, acl.AccessDeniedError(
 			fmt.Sprintf("can't access '%s/%s', cross-namespace references have been blocked",
-				obj.GetSourceRef().GetGroupKind().Kind, obj.GetNamespace()))
+				action.GetSourceRef().GetGroupKind().Kind, action.GetNamespace()))
 	}
 
 	gk := ref.GetGroupKind()
@@ -214,11 +184,11 @@ func GetSource(ctx context.Context, client ctrlclient.Client,
 		return src, nil
 	} else {
 		namespacedName := types.NamespacedName{
-			Namespace: obj.GetNamespace(),
+			Namespace: ref.GetNamespace(),
 		}
 
+		key := utils.KeyForReference(action, ref)
 		artList := &artifactv1.ArtifactList{}
-		key := utils.KeyForReference(obj, ref)
 		if key != "" {
 			err := client.List(ctx, artList, ctrlclient.MatchingFields{
 				artifactOwnerIndexKey: key,
