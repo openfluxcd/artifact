@@ -39,16 +39,6 @@ spec:
           spec:
             description: ArtifactSpec defines the desired state of Artifact
             properties:
-              digest:
-                description: Digest is the digest of the file in the form of '<algorithm>:<checksum>'.
-                pattern: ^[a-z0-9]+(?:[.+_-][a-z0-9]+)*:[a-zA-Z0-9=_-]+$
-                type: string
-              lastUpdateTime:
-                description: |-
-                  LastUpdateTime is the timestamp corresponding to the last update of the
-                  Artifact.
-                format: date-time
-                type: string
               metadata:
                 additionalProperties:
                   type: string
@@ -59,10 +49,6 @@ spec:
                   Revision is a human-readable identifier traceable in the origin source
                   system. It can be a Git commit SHA, Git tag, a Helm chart version, etc.
                 type: string
-              size:
-                description: Size is the number of bytes in the file.
-                format: int64
-                type: integer
               url:
                 description: |-
                   URL is the HTTP address of the Artifact as exposed by the controller
@@ -70,12 +56,30 @@ spec:
                   consumption, e.g. by another controller applying the Artifact contents.
                 type: string
             required:
-            - lastUpdateTime
             - revision
             - url
             type: object
           status:
             description: ArtifactStatus defines the observed state of Artifact
+            properties:
+              digest:
+                description: |-
+                  Digest is the digest of the file in the form of '<algorithm>:<checksum>'.
+                  This digest is the digest of the generated artifact in the storage.
+                pattern: ^[a-z0-9]+(?:[.+_-][a-z0-9]+)*:[a-zA-Z0-9=_-]+$
+                type: string
+              lastUpdateTime:
+                description: |-
+                  LastUpdateTime is the timestamp corresponding to the last update of the
+                  Artifact.
+                format: date-time
+                type: string
+              size:
+                description: Size is the number of bytes in the file.
+                format: int64
+                type: integer
+            required:
+            - lastUpdateTime
             type: object
         type: object
     served: true

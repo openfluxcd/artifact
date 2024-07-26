@@ -39,7 +39,15 @@ type ArtifactSpec struct {
 	// +required
 	Revision string `json:"revision"`
 
+	// Metadata holds upstream information such as OCI annotations.
+	// +optional
+	Metadata map[string]string `json:"metadata,omitempty"`
+}
+
+// ArtifactStatus defines the observed state of Artifact
+type ArtifactStatus struct {
 	// Digest is the digest of the file in the form of '<algorithm>:<checksum>'.
+	// This digest is the digest of the generated artifact in the storage.
 	// +optional
 	// +kubebuilder:validation:Pattern="^[a-z0-9]+(?:[.+_-][a-z0-9]+)*:[a-zA-Z0-9=_-]+$"
 	Digest string `json:"digest,omitempty"`
@@ -52,16 +60,6 @@ type ArtifactSpec struct {
 	// Size is the number of bytes in the file.
 	// +optional
 	Size *int64 `json:"size,omitempty"`
-
-	// Metadata holds upstream information such as OCI annotations.
-	// +optional
-	Metadata map[string]string `json:"metadata,omitempty"`
-}
-
-// ArtifactStatus defines the observed state of Artifact
-type ArtifactStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
 }
 
 // +kubebuilder:object:root=true
@@ -94,9 +92,9 @@ func (a *Artifact) GetArtifact() *sourcev1.Artifact {
 		Path:           "",
 		URL:            a.Spec.URL,
 		Revision:       a.Spec.Revision,
-		Digest:         a.Spec.Digest,
-		LastUpdateTime: a.Spec.LastUpdateTime,
-		Size:           a.Spec.Size,
+		Digest:         a.Status.Digest,
+		LastUpdateTime: a.Status.LastUpdateTime,
+		Size:           a.Status.Size,
 		Metadata:       a.Spec.Metadata,
 	}
 }
