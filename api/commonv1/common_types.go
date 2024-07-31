@@ -3,6 +3,7 @@ package commonv1
 import (
 	"fmt"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
+	"github.com/openfluxcd/artifact/matchers"
 	"github.com/openfluxcd/artifact/utils"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -38,9 +39,14 @@ func (s *SourceRef) GetObjectKey() ctrlclient.ObjectKey {
 
 func (s *SourceRef) GetGroupKind() schema.GroupKind {
 	if s.APIVersion == "" {
-		return schema.GroupKind{
+		if _, ok := matchers.BuiltinFluxSourceKinds[schema.GroupKind{
 			Group: sourcev1.GroupVersion.Group,
 			Kind:  s.Kind,
+		}]; ok {
+			return schema.GroupKind{
+				Group: sourcev1.GroupVersion.Group,
+				Kind:  s.Kind,
+			}
 		}
 	}
 

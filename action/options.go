@@ -2,7 +2,6 @@ package action
 
 import (
 	"github.com/fluxcd/pkg/runtime/predicates"
-	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	"github.com/openfluxcd/artifact/matchers"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -14,7 +13,7 @@ type SourceMatcher = matchers.SourceMatcher
 
 type RequestMapper func(list []runtime.Object) []reconcile.Request
 
-type TriggerPredicate func(action ActionResource, art *sourcev1.Artifact) bool
+type TriggerPredicate func(action ActionResource, art ArtifactSource) bool
 
 type Options struct {
 	ForOptions           []builder.ForOption

@@ -39,7 +39,7 @@ var (
 		{artifactv1.GroupVersion.Group, artifactv1.ArtifactKind}:      &artifactv1.Artifact{},
 	}
 
-	BuiltinHelmIndexSourceKinds = MapMatcher{
+	BuiltinHelmSourceKinds = MapMatcher{
 		{sourcev1.GroupVersion.Group, sourcev1.HelmRepositoryKind}: &sourcev1.HelmRepository{},
 	}
 

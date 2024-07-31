@@ -1,7 +1,6 @@
 package action
 
 import (
-	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -15,6 +14,6 @@ func DefaultRequestMapper(list []runtime.Object) []reconcile.Request {
 	return requests
 }
 
-func TriggerAlwaysPredicate(_ ActionResource, _ *sourcev1.Artifact) bool {
+func TriggerAlwaysPredicate(_ ActionResource, _ ArtifactSource) bool {
 	return true
 }

@@ -6,9 +6,11 @@ toolchain go1.22.2
 
 require (
 	github.com/fluxcd/pkg/runtime v0.47.1
+	github.com/fluxcd/pkg/testserver v0.7.0
 	github.com/fluxcd/source-controller/api v1.3.0
 	github.com/onsi/ginkgo/v2 v2.17.2
 	github.com/onsi/gomega v1.33.1
+	github.com/opencontainers/go-digest v1.0.0
 	k8s.io/apimachinery v0.30.0
 	k8s.io/client-go v0.30.0
 	sigs.k8s.io/controller-runtime v0.18.2

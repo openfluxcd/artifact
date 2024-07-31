@@ -21,8 +21,8 @@ import (
 )
 
 const (
-	sourceRefIndexKey     = ".metadata.sourceref"
-	artifactOwnerIndexKey = ".metadata.artifactowner"
+	SourceRefIndexKey     = ".metadata.sourceref"
+	ArtifactOwnerIndexKey = ".metadata.artifactowner"
 )
 
 type ArtifactSource interface {
@@ -36,7 +36,7 @@ type ActionResourcePointerType[T any] interface {
 
 type ActionResource interface {
 	ctrlclient.Object
-	GetSourceRef() utils.SourceRefProvider
+	GetSourceRef() (utils.SourceRefProvider, error)
 }
 
 var _ ArtifactSource = sourcev1.Source(nil)
@@ -64,7 +64,7 @@ func requestsForRevisionChangeOf[T any, P ActionResourcePointerType[T]](client c
 			list := utils.CreateListForType[T, P](scheme)
 			gk := utils.GetGroupKindForObject(scheme, obj)
 			if err := client.List(ctx, list, ctrlclient.MatchingFields{
-				sourceRefIndexKey: fmt.Sprintf("%s/%s/%s/%s", gk.Group, gk.Kind, obj.GetNamespace(), obj.GetName()),
+				SourceRefIndexKey: fmt.Sprintf("%s/%s/%s/%s", gk.Group, gk.Kind, obj.GetNamespace(), obj.GetName()),
 			}); err != nil {
 				log.Error(err, "failed to list objects for revision change")
 				return nil
@@ -75,7 +75,7 @@ func requestsForRevisionChangeOf[T any, P ActionResourcePointerType[T]](client c
 			}
 		}
 		for i := 0; i < len(actions); i++ {
-			if !opts.TriggerPredicate(actions[i].(ActionResource), src.GetArtifact()) {
+			if !opts.TriggerPredicate(actions[i].(ActionResource), src) {
 				actions = append(actions[:i], actions[i+1:]...)
 				i--
 			}
@@ -94,7 +94,7 @@ func lookupByCoordinates[T any, P ActionResourcePointerType[T]](ctx context.Cont
 	log := ctrl.LoggerFrom(ctx)
 	list := utils.CreateListForType[T, P](scheme)
 	if err := client.List(ctx, list, ctrlclient.MatchingFields{
-		sourceRefIndexKey: fmt.Sprintf("%s/%s/%s/%s", group, kind, ns, name),
+		SourceRefIndexKey: fmt.Sprintf("%s/%s/%s/%s", group, kind, ns, name),
 	}); err != nil {
 		log.Error(err, "failed to list objects for revision change")
 		return nil
@@ -110,12 +110,12 @@ func Setup[T any, P ActionResourcePointerType[T]](ctx context.Context, mgr ctrl.
 	var _obj T
 	obj := P(&_obj)
 
-	if err := mgr.GetCache().IndexField(ctx, obj, sourceRefIndexKey,
+	if err := mgr.GetCache().IndexField(ctx, obj, SourceRefIndexKey,
 		SourceReferenceIndex[P]()); err != nil {
 		return nil, fmt.Errorf("failed setting index fields: %w", err)
 	}
 
-	if err := mgr.GetCache().IndexField(ctx, &artifactv1.Artifact{}, artifactOwnerIndexKey,
+	if err := mgr.GetCache().IndexField(ctx, &artifactv1.Artifact{}, ArtifactOwnerIndexKey,
 		utils.OwnerReferenceIndex()); err != nil {
 		return nil, fmt.Errorf("failed setting index fields: %w", err)
 	}
@@ -143,8 +143,11 @@ func SourceReferenceIndex[T ActionResource]() func(o ctrlclient.Object) []string
 			var _nil T
 			panic(fmt.Sprintf("Expected a resource of type %T, got %T", _nil, o))
 		}
-
-		key := utils.KeyForReference(k, k.GetSourceRef())
+		sourceref, err := k.GetSourceRef()
+		if err != nil {
+			return nil
+		}
+		key := utils.KeyForReference(k, sourceref)
 		if key != "" {
 			return []string{key}
 		}
@@ -154,13 +157,17 @@ func SourceReferenceIndex[T ActionResource]() func(o ctrlclient.Object) []string
 }
 
 func GetSource(ctx context.Context, client ctrlclient.Client, action ActionResource, options ...Option) (ArtifactSource, error) {
-	ref := utils.NormalizedSourceRef(action.GetSourceRef(), action.GetNamespace())
+	raw, err := action.GetSourceRef()
+	if err != nil {
+		return nil, err
+	}
+	ref := utils.NormalizedSourceRef(raw, action.GetNamespace())
 
 	opts := EvalOptions(options...)
 	if opts.CrossNamespaceRefsForbidden() && ref.GetNamespace() != action.GetNamespace() {
 		return nil, acl.AccessDeniedError(
 			fmt.Sprintf("can't access '%s/%s', cross-namespace references have been blocked",
-				action.GetSourceRef().GetGroupKind().Kind, action.GetNamespace()))
+				ref.GetGroupKind().Kind, ref.GetNamespace()))
 	}
 
 	gk := ref.GetGroupKind()
@@ -191,7 +198,7 @@ func GetSource(ctx context.Context, client ctrlclient.Client, action ActionResou
 		artList := &artifactv1.ArtifactList{}
 		if key != "" {
 			err := client.List(ctx, artList, ctrlclient.MatchingFields{
-				artifactOwnerIndexKey: key,
+				ArtifactOwnerIndexKey: key,
 			})
 			if err != nil {
 				return nil, err
