@@ -58,6 +58,10 @@ func (d *DefaultSourceRef) String() string {
 	return fmt.Sprintf("%s/%s/%s", d.GetGroupKind().Group, d.GetGroupKind().Kind, d.GetName())
 }
 
+func IsSameResource(a, b SourceRefProvider) bool {
+	return a.GetGroupKind() == b.GetGroupKind() && a.GetNamespace() == b.GetNamespace() && a.GetName() == b.GetName()
+}
+
 func NormalizedSourceRef(ref SourceRefProvider, defns string) SourceRefProvider {
 	if ref.GetNamespace() == "" {
 		return NewSourceRef(ref.GetGroupKind().Group, ref.GetGroupKind().Kind, defns, ref.GetName())
