@@ -2,7 +2,7 @@
 # This file is used to track the info used to scaffold your project
 # and allow the plugins properly work.
 # More info: https://book.kubebuilder.io/reference/project-config.html
-domain: mandelsoft.org
+domain: ocm.software
 layout:
 - go.kubebuilder.io/v4
 projectName: artifact
@@ -11,7 +11,7 @@ resources:
 - api:
     crdVersion: v1
     namespaced: true
-  domain: mandelsoft.org
+  domain: ocm.software
   group: openfluxcd
   kind: Artifact
   path: github.com/openfluxcd/artifact/api/v1alpha1
