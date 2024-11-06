@@ -1,4 +1,4 @@
-apiVersion: openfluxcd.mandelsoft.org/v1alpha1
+apiVersion: openfluxcd.ocm.software/v1alpha1
 kind: Artifact
 metadata:
   labels:

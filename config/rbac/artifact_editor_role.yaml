@@ -8,7 +8,7 @@ metadata:
   name: artifact-editor-role
 rules:
 - apiGroups:
-  - openfluxcd.mandelsoft.org
+  - openfluxcd.ocm.software
   resources:
   - artifacts
   verbs:
@@ -20,7 +20,7 @@ rules:
   - update
   - watch
 - apiGroups:
-  - openfluxcd.mandelsoft.org
+  - openfluxcd.ocm.software
   resources:
   - artifacts/status
   verbs:
