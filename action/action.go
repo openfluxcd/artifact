@@ -61,15 +61,6 @@ func requestsForRevisionChangeOf[T any, P ActionResourcePointerType[T]](client c
 		actions := lookupBySourceObj[T, P](ctx, client, scheme, obj, src.GetArtifact())
 
 		if art, ok := src.(*artifactv1.Artifact); ok {
-			list := utils.CreateListForType[T, P](scheme)
-			gk := utils.GetGroupKindForObject(scheme, obj)
-			if err := client.List(ctx, list, ctrlclient.MatchingFields{
-				SourceRefIndexKey: fmt.Sprintf("%s/%s/%s/%s", gk.Group, gk.Kind, obj.GetNamespace(), obj.GetName()),
-			}); err != nil {
-				log.Error(err, "failed to list objects for revision change")
-				return nil
-			}
-
 			for _, ref := range art.OwnerReferences {
 				actions = append(actions, lookupByCoordinates[T, P](ctx, client, scheme, utils.ExtractGroupName(ref.APIVersion), ref.Kind, art.Namespace, ref.Name, art.GetArtifact())...)
 			}
